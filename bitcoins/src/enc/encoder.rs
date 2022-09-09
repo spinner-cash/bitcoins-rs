@@ -119,8 +119,18 @@ impl<P: NetworkParams> AddressEncoder for BitcoinEncoder<P> {
 
     fn decode_address(addr: &Address) -> ScriptPubkey {
         match &addr {
-            Address::Pkh(s) => decode_base58(P::PKH_VERSION, s).unwrap().into(),
-            Address::Sh(s) => decode_base58(P::SH_VERSION, s).unwrap().into(),
+            Address::Pkh(s) => {
+                let mut v: Vec<u8> = vec![0x76, 0xa9, 0x14]; // DUP, HASH160, PUSH_20
+                v.extend(&decode_base58(P::PKH_VERSION, s).unwrap());
+                v.extend(&[0x88, 0xac]); // EQUALVERIFY, CHECKSIG
+                v.into()
+            }
+            Address::Sh(s) => {
+                let mut v: Vec<u8> = vec![0xa9, 0x14]; // HASH160, PUSH_20
+                v.extend(&decode_base58(P::SH_VERSION, s).unwrap());
+                v.extend(&[0x87]); // EUQAL
+                v.into()
+            }
             Address::Wpkh(s) | Address::Wsh(s) => decode_bech32(P::HRP, s).unwrap().into(),
         }
     }
