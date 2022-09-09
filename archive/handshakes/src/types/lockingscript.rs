@@ -203,7 +203,7 @@ impl LockingScript {
     /// Instantiate a standard p2wpkh script pubkey from a pubkey.
     pub fn p2wpkh<T>(key: &T) -> Self
     where
-        T: AsRef<coins_bip32::ecdsa::VerifyingKey>,
+        T: AsRef<coins_bip32::k256::ecdsa::VerifyingKey>,
     {
         Self {
             version: 0,
