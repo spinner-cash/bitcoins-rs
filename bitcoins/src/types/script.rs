@@ -95,7 +95,7 @@ impl ScriptPubkey {
     /// Instantiate a standard p2pkh script pubkey from a pubkey.
     pub fn p2pkh<K>(key: &K) -> Self
     where
-        K: AsRef<coins_bip32::ecdsa::VerifyingKey>,
+        K: AsRef<coins_bip32::k256::ecdsa::VerifyingKey>,
     {
         let digest = Hash160::digest(&key.as_ref().to_bytes());
 
@@ -108,7 +108,7 @@ impl ScriptPubkey {
     /// Instantiate a standard p2wpkh script pubkey from a pubkey.
     pub fn p2wpkh<K>(key: &K) -> Self
     where
-        K: AsRef<coins_bip32::ecdsa::VerifyingKey>,
+        K: AsRef<coins_bip32::k256::ecdsa::VerifyingKey>,
     {
         let digest = Hash160::digest(&key.as_ref().to_bytes());
 

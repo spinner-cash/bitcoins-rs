@@ -43,7 +43,9 @@
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
 
-pub use k256::ecdsa;
+pub use k256;
+
+use k256::ecdsa;
 
 #[macro_use]
 pub(crate) mod macros;
