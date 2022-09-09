@@ -5,7 +5,7 @@ use bech32::{
     decode as b32_decode, encode as b32_encode, u5, Error as BechError, FromBase32, ToBase32,
 };
 
-use base58check::{FromBase58Check, FromBase58CheckError, ToBase58Check};
+use bs58::{decode, encode};
 
 use thiserror::Error;
 
@@ -36,7 +36,7 @@ pub enum EncodingError {
 
     /// Bubbled up error from base58check library
     #[error("FromBase58CheckError: {0:?}")]
-    B58Error(FromBase58CheckError),
+    B58Error(bs58::decode::Error),
 
     /// Bubbled up error from bech32 library
     #[error(transparent)]
@@ -56,8 +56,8 @@ pub enum EncodingError {
 }
 
 /// Impl explicitly because FromBase58CheckError doesn't implement the std error format
-impl From<FromBase58CheckError> for EncodingError {
-    fn from(e: FromBase58CheckError) -> Self {
+impl From<bs58::decode::Error> for EncodingError {
+    fn from(e: bs58::decode::Error) -> Self {
         EncodingError::B58Error(e)
     }
 }
@@ -93,20 +93,13 @@ pub fn decode_bech32(expected_hrp: &str, s: &str) -> EncodingResult<(u8, Vec<u8>
 
 /// Encodes a byte slice to base58check with the specified version byte.
 pub fn encode_base58(version: u8, v: &[u8]) -> String {
-    v.to_base58check(version)
+    encode(v).with_check_version(version).into_string()
 }
 
 /// Decodes base58check into a byte string. Returns a `FromBase58CheckError` if the checksum or
 /// encoding is wrong. Returns a `WrongVersion` if it decodes an unexpected version.
 pub fn decode_base58(expected_version: u8, s: &str) -> EncodingResult<Vec<u8>> {
-    let (version, data) = s.from_base58check()?;
-    if version != expected_version {
-        return Err(EncodingError::WrongVersion {
-            got: version,
-            expected: expected_version,
-        });
-    };
-    Ok(data)
+    Ok(decode(s).with_check(Some(expected_version)).into_vec()?[1..].to_vec())
 }
 
 #[cfg(test)]
@@ -188,10 +181,7 @@ mod test {
         }
         match decode_base58(1, "3HXNFmJpxjgTVFN35Y9f6Waje5YFsLEQZ2") {
             Ok(_) => panic!("expected an error"),
-            Err(EncodingError::WrongVersion {
-                got: _,
-                expected: _,
-            }) => {}
+            Err(EncodingError::B58Error(_)) => {}
             _ => panic!("Got the wrong error"),
         }
         match decode_bech32("bc", "bc1qqh9ue57m6227627j8ztscl9") {

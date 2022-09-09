@@ -10,7 +10,6 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 hex = "0.4.2"
 bech32 = "0.7.2"
-base58check = "0.1.0"
 thiserror = "1.0"
 serde = "1.0.105"
 
