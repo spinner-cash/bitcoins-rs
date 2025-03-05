@@ -1,9 +1,6 @@
 use coins_core::hashes::{Hash160, Hash160Digest, MarkedDigest, MarkedDigestOutput};
 use hmac::{Hmac, Mac};
-use k256::{
-    ecdsa,
-    elliptic_curve::sec1::{FromEncodedPoint, ToEncodedPoint},
-};
+use k256::{ecdsa, elliptic_curve::sec1::FromEncodedPoint};
 use sha2::Sha512;
 use std::{
     convert::{TryFrom, TryInto},
@@ -115,14 +112,14 @@ impl AsRef<ecdsa::SigningKey> for XPriv {
 
 impl XPriv {
     /// Instantiate a new XPriv.
-    pub fn new(key: ecdsa::SigningKey, xkey_info: XKeyInfo) -> Self {
+    pub const fn new(key: ecdsa::SigningKey, xkey_info: XKeyInfo) -> Self {
         Self { key, xkey_info }
     }
 
     /// Derive the associated XPub
     pub fn verify_key(&self) -> XPub {
         XPub {
-            key: self.key.verifying_key(),
+            key: self.key.verifying_key().to_owned(),
             xkey_info: self.xkey_info,
         }
     }
@@ -224,7 +221,7 @@ impl Parent for XPriv {
             data.extend(key.to_bytes());
             data.extend(index.to_be_bytes());
         } else {
-            data.extend(key.verifying_key().to_bytes());
+            data.extend(key.verifying_key().to_sec1_bytes().iter());
             data.extend(index.to_be_bytes());
         };
 
@@ -253,6 +250,7 @@ impl Parent for XPriv {
     }
 }
 
+#[derive(Copy)]
 /// A BIP32 eXtended Public key
 pub struct XPub {
     pub(crate) key: ecdsa::VerifyingKey,
@@ -263,17 +261,14 @@ inherit_verifier!(XPub.key);
 
 impl Clone for XPub {
     fn clone(&self) -> Self {
-        Self {
-            key: ecdsa::VerifyingKey::from_sec1_bytes(self.key.to_bytes().as_ref()).unwrap(),
-            xkey_info: self.xkey_info,
-        }
+        *self
     }
 }
 
 impl std::fmt::Debug for XPub {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("XPub")
-            .field("public key", &self.key.to_bytes())
+            .field("public key", &self.key.to_sec1_bytes())
             .field("key fingerprint", &self.fingerprint())
             .field("key info", &self.xkey_info)
             .finish()
@@ -300,7 +295,7 @@ impl AsRef<ecdsa::VerifyingKey> for XPub {
 
 impl XPub {
     /// Instantiate a new XPub
-    pub fn new(key: ecdsa::VerifyingKey, xkey_info: XKeyInfo) -> Self {
+    pub const fn new(key: ecdsa::VerifyingKey, xkey_info: XKeyInfo) -> Self {
         Self { key, xkey_info }
     }
 
@@ -315,13 +310,13 @@ impl XPub {
 
     /// Return the bitcoin HASH160 of the serialized public key
     pub fn pubkey_hash160(&self) -> Hash160Digest {
-        Hash160::digest_marked(self.key.to_bytes().as_ref())
+        Hash160::digest_marked(self.key.to_sec1_bytes().as_ref())
     }
 }
 
 impl PartialEq for XPub {
     fn eq(&self, other: &XPub) -> bool {
-        self.key.to_bytes() == other.key.to_bytes()
+        self.key == other.key
     }
 }
 
@@ -331,7 +326,9 @@ impl Parent for XPub {
             return Err(Bip32Error::HardenedDerivationFailed);
         }
         let mut data = vec![];
-        data.extend(self.key.to_bytes());
+        // secp256k1 points are converted to compressed form
+        // https://github.com/RustCrypto/elliptic-curves/blob/3ee0ba1aa5bb74777928c21bb198d2a696f0dd9d/k256/src/lib.rs#L98
+        data.extend(self.key.to_sec1_bytes().iter());
         data.extend(index.to_be_bytes());
 
         let res = hmac_and_split(&self.xkey_info.chain_code.0, &data);
@@ -350,7 +347,7 @@ impl Parent for XPub {
         let mut tweak_point = k256::ProjectivePoint::GENERATOR.mul(*tweak);
         tweak_point.add_assign(parent_key);
 
-        let key = ecdsa::VerifyingKey::try_from(&tweak_point.to_affine())?;
+        let key = ecdsa::VerifyingKey::from_affine(tweak_point.to_affine())?;
         Ok(Self {
             key,
             xkey_info: XKeyInfo {
@@ -372,17 +369,14 @@ mod test {
         primitives::*,
     };
     use coins_core::hashes::Hash256;
-    use k256::ecdsa::{
-        recoverable,
-        signature::{DigestSigner, DigestVerifier},
-    };
+    use k256::ecdsa::signature::{DigestSigner, DigestVerifier};
 
     use hex;
 
     struct KeyDeriv<'a> {
-        pub path: &'a [u32],
-        pub xpub: String,
-        pub xpriv: String,
+        pub(crate) path: &'a [u32],
+        pub(crate) xpub: String,
+        pub(crate) xpriv: String,
     }
 
     fn validate_descendant(d: &KeyDeriv, m: &XPriv) {
@@ -398,7 +392,7 @@ mod test {
 
         assert_eq!(&xpriv.key.to_bytes(), &deser_xpriv.key.to_bytes());
         assert_eq!(MainnetEncoder::xpriv_to_base58(&xpriv).unwrap(), d.xpriv);
-        assert_eq!(&xpub.key.to_bytes(), &deser_xpub.key.to_bytes());
+        assert_eq!(&xpub.key.to_sec1_bytes(), &deser_xpub.key.to_sec1_bytes());
         assert_eq!(MainnetEncoder::xpub_to_base58(&xpub).unwrap(), d.xpub);
     }
 
@@ -420,7 +414,7 @@ mod test {
             MainnetEncoder::xpriv_to_base58(&xpriv).unwrap(),
             expected_xpriv
         );
-        assert_eq!(&xpub.key.to_bytes(), &deser_xpub.key.to_bytes());
+        assert_eq!(&xpub.key.to_sec1_bytes(), &deser_xpub.key.to_sec1_bytes());
         assert_eq!(
             MainnetEncoder::xpub_to_base58(&xpub).unwrap(),
             expected_xpub
@@ -477,7 +471,7 @@ mod test {
             MainnetEncoder::xpriv_to_base58(&xpriv).unwrap(),
             expected_xpriv
         );
-        assert_eq!(&xpub.key.to_bytes(), &deser_xpub.key.to_bytes());
+        assert_eq!(&xpub.key.to_sec1_bytes(), &deser_xpub.key.to_sec1_bytes());
         assert_eq!(
             MainnetEncoder::xpub_to_base58(&xpub).unwrap(),
             expected_xpub
@@ -534,7 +528,7 @@ mod test {
             MainnetEncoder::xpriv_to_base58(&xpriv).unwrap(),
             expected_xpriv
         );
-        assert_eq!(&xpub.key.to_bytes(), &deser_xpub.key.to_bytes());
+        assert_eq!(&xpub.key.to_sec1_bytes(), &deser_xpub.key.to_sec1_bytes());
         assert_eq!(
             MainnetEncoder::xpub_to_base58(&xpub).unwrap(),
             expected_xpub
@@ -560,7 +554,7 @@ mod test {
         let xpriv = MainnetEncoder::xpriv_from_base58(&xpriv_str).unwrap();
 
         let child = xpriv.derive_child(33).unwrap();
-        let sig: recoverable::Signature = child.sign_digest(digest.clone());
+        let sig: ecdsa::Signature = child.sign_digest(digest.clone());
 
         let child_xpub = child.verify_key();
         child_xpub.verify_digest(digest, &sig).unwrap();
@@ -575,14 +569,16 @@ mod test {
 
         let child = xpriv.derive_child(33).unwrap();
 
-        let sig: recoverable::Signature = child.sign_digest(digest.clone());
+        let (sig, recovery_id): (ecdsa::Signature, ecdsa::RecoveryId) =
+            child.sign_digest(digest.clone());
 
         let child_xpub = child.verify_key();
         child_xpub.verify_digest(digest.clone(), &sig).unwrap();
 
-        let recovered = sig.recover_verifying_key_from_digest(digest).unwrap();
+        let recovered =
+            ecdsa::VerifyingKey::recover_from_digest(digest, &sig, recovery_id).unwrap();
 
-        assert_eq!(&recovered.to_bytes(), &child_xpub.key.to_bytes());
+        assert_eq!(&recovered.to_sec1_bytes(), &child_xpub.key.to_sec1_bytes());
     }
 
     #[test]

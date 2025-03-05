@@ -11,13 +11,13 @@ license = "MIT OR Apache-2.0"
 thiserror = "1.0"
 hmac = "0.12"
 sha2 = "0.10"
-bs58 = "0.4.0"
-lazy_static = "1.4.0"
-coins-core = { version = "0.7.0", path = "../core" }
-serde = "1.0.105"
-bincode = "1.3.3"
+bs58 = "0.5"
+lazy_static = "1.4"
+coins-core = { path = "../core" }
+serde = "1.0"
+bincode = "1.3"
 
-k256 = { version = "0.11", default-features = false, features = ["ecdsa", "sha256", "digest" ] }
+k256 = { version = "0.13", default-features = false, features = ["alloc", "ecdsa", "sha256", "digest"] }
 digest = "0.10"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

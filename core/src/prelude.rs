@@ -2,7 +2,7 @@
 
 pub use crate::{
     builder::TxBuilder,
-    enc::*,
+    enc,
     hashes::*,
     nets::Network,
     ser::{ByteFormat, ReadSeqMode},

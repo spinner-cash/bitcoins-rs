@@ -3,7 +3,7 @@
 use std::marker::PhantomData;
 
 use coins_core::{
-    bases::{decode_base58, encode_base58},
+    enc::bases::{decode_base58, encode_base58},
     enc::{AddressEncoder, EncodingError, EncodingResult},
     hashes::MarkedDigestOutput,
 };
